@@ -7,7 +7,7 @@ const app = express();
 
 // ✅ CORS setup for credentials
 app.use(cors({
-  origin: "http://localhost:3000", // <-- your frontend URL
+  origin: "https://tour-arcade-mystery.vercel.app/", // <-- your frontend URL
   credentials: true
 }));
 
