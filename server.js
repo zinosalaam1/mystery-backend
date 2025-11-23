@@ -4,129 +4,107 @@ import fs from "fs";
 import { v4 as uuid } from "uuid";
 
 const app = express();
-
-// ✅ CORS setup for credentials
-const allowedOrigins = [
-  "http://localhost:3000", // local dev
-  "https://tour-arcade-mystery.vercel.app" // production frontend
-];
+const PORT = process.env.PORT || 5000;
+const GAME_FILE = "./data/gameState.json";
+const MAX_CHANCES = 3;
 
 app.use(cors({
-  origin: function(origin, callback){
-    if(!origin) return callback(null, true); // allow non-browser requests
-    if(allowedOrigins.indexOf(origin) === -1){
-      return callback(new Error(`CORS Error: ${origin} not allowed`), false);
-    }
-    return callback(null, true);
-  },
+  origin: "https://tour-arcade-mystery.vercel.app", // your frontend URL
   credentials: true
 }));
-
 app.use(express.json());
 
-const GAME_FILE = "./data/gameState.json";
-
-// Load game state
-function loadGame() {
-  if (!fs.existsSync(GAME_FILE)) {
-    // Initialize if file doesn't exist
-    const initialState = { winners: [], claimedRewards: 0, rewardBoxes: [], players: {} };
-    fs.writeFileSync(GAME_FILE, JSON.stringify(initialState, null, 2));
-  }
-  return JSON.parse(fs.readFileSync(GAME_FILE));
+// Ensure gameState.json exists
+if (!fs.existsSync(GAME_FILE)) {
+  fs.writeFileSync(GAME_FILE, JSON.stringify({
+    winners: [],
+    claimedRewards: 0,
+    rewardBoxes: [],
+    players: {}
+  }, null, 2));
 }
 
-// Save game state
-function saveGame(state) {
-  fs.writeFileSync(GAME_FILE, JSON.stringify(state, null, 2));
-}
+// Load and save game state
+const loadGame = () => JSON.parse(fs.readFileSync(GAME_FILE));
+const saveGame = (state: any) => fs.writeFileSync(GAME_FILE, JSON.stringify(state, null, 2));
 
 // Generate 15 random reward boxes
-function generateRewardBoxes() {
-  let boxes = [];
+const generateRewardBoxes = () => {
+  let boxes: number[] = [];
   while (boxes.length < 15) {
     let num = Math.floor(Math.random() * 50) + 1;
     if (!boxes.includes(num)) boxes.push(num);
   }
   return boxes;
-}
+};
 
-// Initialize game at startup
-function initializeGame() {
+// Initialize game
+const initializeGame = () => {
   let state = loadGame();
   if (!state.rewardBoxes.length) {
     state.rewardBoxes = generateRewardBoxes();
     saveGame(state);
   }
-}
+};
 initializeGame();
 
-// 🟡 Ping route
-app.get("/api/ping", (req, res) => {
-  res.json({ message: "pong" });
-});
+// Ping route
+app.get("/api/ping", (req, res) => res.json({ message: "pong" }));
 
-// 🟡 Register username
+// Register username
 app.post("/api/register", (req, res) => {
   const { username } = req.body;
-
-  let state = loadGame();
-
-  if (state.players[username]) {
-    return res.json({ success: true, alreadyPlayed: true });
-  }
-
-  state.players[username] = {
-    id: uuid(),
-    played: false
-  };
-
-  saveGame(state);
-
-  res.json({ success: true });
-});
-
-// 🔵 User selects a box
-app.post("/api/select-box", (req, res) => {
-  const { username, boxNumber } = req.body;
-
   let state = loadGame();
 
   if (!state.players[username]) {
-    return res.json({ success: false, message: "User not registered." });
+    state.players[username] = {
+      id: uuid(),
+      remainingChances: MAX_CHANCES,
+      playedBoxes: []
+    };
+    saveGame(state);
   }
 
-  if (state.players[username].played) {
-    return res.json({ success: false, message: "User already played." });
+  res.json({ success: true, remainingChances: state.players[username].remainingChances });
+});
+
+// User selects a box
+app.post("/api/select-box", (req, res) => {
+  const { username, boxNumber } = req.body;
+  let state = loadGame();
+
+  const player = state.players[username];
+  if (!player) return res.status(400).json({ success: false, message: "User not registered." });
+
+  if (player.remainingChances <= 0) {
+    return res.json({ success: false, message: "No remaining chances.", remainingChances: 0 });
   }
 
-  const isReward = state.rewardBoxes.includes(boxNumber);
+  if (player.playedBoxes.includes(boxNumber)) {
+    return res.json({ success: false, message: "Box already selected.", remainingChances: player.remainingChances });
+  }
 
-  // Mark player as played
-  state.players[username].played = true;
-
-  let rewardWon = false;
-  let message = "No reward";
-
-  if (isReward && state.claimedRewards < 5) {
-    rewardWon = true;
+  const isReward = state.rewardBoxes.includes(boxNumber) && state.claimedRewards < 5;
+  if (isReward) {
     state.claimedRewards += 1;
     state.winners.push({ username, boxNumber });
-    message = "You won!";
   }
+
+  player.playedBoxes.push(boxNumber);
+  player.remainingChances -= 1;
 
   saveGame(state);
 
   res.json({
     success: true,
-    reward: rewardWon,
-    message,
-    rewardsLeft: 5 - state.claimedRewards,
-    isReward
+    reward: isReward,
+    message: isReward ? "You won!" : "No reward",
+    remainingChances: player.remainingChances,
+    rewardsLeft: 5 - state.claimedRewards
   });
 });
 
-// 🟣 Reset game (optional)
+// Optional: Reset game
 app.get("/api/reset", (req, res) => {
   let newState = {
     winners: [],
@@ -134,11 +112,8 @@ app.get("/api/reset", (req, res) => {
     rewardBoxes: generateRewardBoxes(),
     players: {}
   };
-
   saveGame(newState);
   res.json({ success: true, message: "Game reset!" });
 });
 
-// Start server
-const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
