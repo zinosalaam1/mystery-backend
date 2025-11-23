@@ -6,8 +6,19 @@ import { v4 as uuid } from "uuid";
 const app = express();
 
 // ✅ CORS setup for credentials
+const allowedOrigins = [
+  "http://localhost:3000", // local dev
+  "https://tour-arcade-mystery.vercel.app" // production frontend
+];
+
 app.use(cors({
-  origin: "https://tour-arcade-mystery.vercel.app/", // <-- your frontend URL
+  origin: function(origin, callback){
+    if(!origin) return callback(null, true); // allow non-browser requests
+    if(allowedOrigins.indexOf(origin) === -1){
+      return callback(new Error(`CORS Error: ${origin} not allowed`), false);
+    }
+    return callback(null, true);
+  },
   credentials: true
 }));
 
@@ -17,6 +28,11 @@ const GAME_FILE = "./data/gameState.json";
 
 // Load game state
 function loadGame() {
+  if (!fs.existsSync(GAME_FILE)) {
+    // Initialize if file doesn't exist
+    const initialState = { winners: [], claimedRewards: 0, rewardBoxes: [], players: {} };
+    fs.writeFileSync(GAME_FILE, JSON.stringify(initialState, null, 2));
+  }
   return JSON.parse(fs.readFileSync(GAME_FILE));
 }
 
@@ -123,4 +139,6 @@ app.get("/api/reset", (req, res) => {
   res.json({ success: true, message: "Game reset!" });
 });
 
-app.listen(5000, () => console.log("Backend running on port 5000"));
+// Start server
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
