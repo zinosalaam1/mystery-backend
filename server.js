@@ -1,11 +1,18 @@
-const express = require("express");
-const cors = require("cors");
-const fs = require("fs");
-const { v4: uuid } = require("uuid");
+import express from "express";
+import cors from "cors";
+import fs from "fs";
+import { v4 as uuid } from "uuid";
+import path from "path";
+import { fileURLToPath } from "url";
 
 const app = express();
 const PORT = process.env.PORT || 5000;
-const GAME_FILE = "./data/gameState.json";
+
+// Resolve dirname (ESM does not support __dirname)
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+const GAME_FILE = path.join(__dirname, "data", "gameState.json");
 const MAX_CHANCES = 3;
 
 app.use(cors({
@@ -17,17 +24,21 @@ app.use(express.json());
 
 // Ensure gameState.json exists
 if (!fs.existsSync(GAME_FILE)) {
-  fs.writeFileSync(GAME_FILE, JSON.stringify({
-    winners: [],
-    claimedRewards: 0,
-    rewardBoxes: [],
-    players: {}
-  }, null, 2));
+  fs.writeFileSync(
+    GAME_FILE,
+    JSON.stringify({
+      winners: [],
+      claimedRewards: 0,
+      rewardBoxes: [],
+      players: {}
+    }, null, 2)
+  );
 }
 
-// Load and save game state
+// Load/save game state
 const loadGame = () => JSON.parse(fs.readFileSync(GAME_FILE));
-const saveGame = (state) => fs.writeFileSync(GAME_FILE, JSON.stringify(state, null, 2));
+const saveGame = (state) =>
+  fs.writeFileSync(GAME_FILE, JSON.stringify(state, null, 2));
 
 // Generate 15 random reward boxes
 const generateRewardBoxes = () => {
@@ -39,7 +50,7 @@ const generateRewardBoxes = () => {
   return boxes;
 };
 
-// Initialize game if boxes not set
+// Initialize game
 const initializeGame = () => {
   const state = loadGame();
   if (!state.rewardBoxes.length) {
@@ -49,7 +60,7 @@ const initializeGame = () => {
 };
 initializeGame();
 
-// Ping route
+// Ping
 app.get("/api/ping", (req, res) => {
   res.json({ message: "pong" });
 });
@@ -74,7 +85,7 @@ app.post("/api/register", (req, res) => {
   });
 });
 
-// User selects a box
+// Select box
 app.post("/api/select-box", (req, res) => {
   const { username, boxNumber } = req.body;
   let state = loadGame();
@@ -130,5 +141,5 @@ app.get("/api/reset", (req, res) => {
   res.json({ success: true, message: "Game reset!" });
 });
 
-// Start server
+// Run server
 app.listen(PORT, () => console.log(`Backend running on port ${PORT}`));
