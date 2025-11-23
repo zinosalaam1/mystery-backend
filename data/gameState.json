@@ -1,0 +1,27 @@
+{
+  "winners": [],
+  "claimedRewards": 0,
+  "rewardBoxes": [
+    33,
+    35,
+    16,
+    48,
+    15,
+    26,
+    46,
+    6,
+    28,
+    1,
+    44,
+    36,
+    9,
+    19,
+    14
+  ],
+  "players": {
+    "Zinoln": {
+      "id": "4c05b3d7-ad92-4756-90ae-1317c0f033e6",
+      "played": false
+    }
+  }
+}
